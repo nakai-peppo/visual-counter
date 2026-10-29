@@ -1,4 +1,4 @@
-const CACHE_NAME = 'visual-counter-v2'; // ここをv2に変更することでスマホ側が更新を検知します
+const CACHE_NAME = 'visual-counter-v3'; // ここをv2に変更することでスマホ側が更新を検知します
 const urlsToCache = [
   './index.html',
   './manifest.json'
