@@ -1,396 +1,380 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
+<!DOCTYPE html>
+<html lang="ja">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2775.1">
-  <style type="text/css">
-    body {background-color: #0f0f0f}
-    span.s1 {font-kerning: none}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Visual Counter V2</title>
+  <link rel="manifest" href="manifest.json">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --box-bg: #2a2a2a;
+      --text-color: #ffffff;
+      --overlay: rgba(0, 0, 0, 0.4);
+      --highlight: #FFCC00;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 16px;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    h1 { margin: 0; font-size: 1.5rem; width: 100%; }
+    .header-actions { display: flex; gap: 8px; }
+    
+    button {
+      cursor: pointer; border: none; border-radius: 8px;
+      background: rgba(255, 255, 255, 0.2); color: white;
+      padding: 8px 12px; font-size: 0.9rem; font-weight: bold;
+    }
+    button:active { background: rgba(255, 255, 255, 0.4); }
+
+    #grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 20px 16px;
+    }
+    .counter-wrapper { display: flex; flex-direction: column; gap: 8px; }
+    .counter-box {
+      aspect-ratio: 1 / 1; background-color: var(--box-bg); border-radius: 16px;
+      position: relative; overflow: hidden; background-size: cover; background-position: center;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; border: 3px solid transparent;
+      transition: border 0.3s;
+    }
+    .counter-box.target-reached { border-color: var(--highlight); box-shadow: 0 0 15px rgba(255, 204, 0, 0.5); }
+    
+    .ui-layer {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      background: var(--overlay); padding: 10px; transition: background 0.1s;
+    }
+    .counter-box:active .ui-layer { background: rgba(0, 0, 0, 0.1); }
+
+    .top-bar { display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; gap: 4px; }
+    .title-input {
+      background: transparent; border: none; color: white; font-weight: bold;
+      font-size: 1rem; width: 100%; text-shadow: 1px 1px 2px black;
+    }
+    .title-input:focus { outline: none; background: rgba(0,0,0,0.5); border-radius: 4px; }
+    .target-input {
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: var(--highlight);
+      border-radius: 4px; width: 40px; text-align: center; font-size: 0.8rem; font-weight: bold;
+    }
+    
+    .count-display {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-size: 4rem; font-weight: bold; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); pointer-events: none; margin: 0;
+    }
+
+    .action-bar { display: flex; justify-content: space-between; }
+    .icon-btn {
+      padding: 4px; font-size: 1.1rem; border-radius: 50%; width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* モーダル共通 */
+    .modal {
+      display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95);
+      z-index: 9999; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .modal-close { position: absolute; top: 20px; right: 20px; font-size: 2rem; color: white; cursor: pointer; z-index: 10000; }
+    
+    /* カルーセル */
+    .carousel-container { position: relative; width: 100%; height: 80%; display: flex; align-items: center; justify-content: center; }
+    #modalImage { max-width: 95%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+    .carousel-btn {
+      position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2);
+      border: none; color: white; font-size: 2rem; padding: 10px 15px; border-radius: 50%; cursor: pointer;
+    }
+    .carousel-prev { left: 10px; }
+    .carousel-next { right: 10px; }
+    .image-counter { position: absolute; bottom: 10%; color: white; font-size: 1.2rem; font-weight: bold; }
+
+    /* ギャラリー */
+    .gallery-content { width: 90%; max-height: 80%; overflow-y: auto; background: var(--box-bg); padding: 20px; border-radius: 16px; }
+    .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 20px; }
+    .gallery-item { aspect-ratio: 1; background-size: cover; background-position: center; border-radius: 8px; position: relative; border: 2px solid transparent; }
+    .gallery-item.is-cover { border-color: var(--highlight); }
+    .gallery-item-actions { position: absolute; bottom: 4px; right: 4px; display: flex; gap: 4px; }
+    .g-btn { background: rgba(0,0,0,0.7); border: none; border-radius: 4px; font-size: 0.8rem; padding: 4px; cursor: pointer; }
+    .add-image-btn { width: 100%; padding: 12px; margin-top: 15px; background: rgba(255,255,255,0.1); border: 2px dashed rgba(255,255,255,0.5); color: white; border-radius: 8px; font-weight: bold; }
   </style>
 </head>
 <body>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b>&lt;!DOCTYPE html&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b>&lt;html lang="ja"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b>&lt;head&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;meta charset="UTF-8"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;title&gt;Visual Counter V2&lt;/title&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;link rel="manifest" href="manifest.json"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;script&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>if ('serviceWorker' in navigator) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>window.addEventListener('load', () =&gt; {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>navigator.serviceWorker.register('./sw.js').catch(() =&gt; {});</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>});</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;/script&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;style&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>:root {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>--bg-color: #121212;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>--box-bg: #2a2a2a;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>--text-color: #ffffff;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>--overlay: rgba(0, 0, 0, 0.4);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>--highlight: #FFCC00;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>body {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>background-color: var(--bg-color);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>color: var(--text-color);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>margin: 0;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>padding: 16px;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>user-select: none;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>-webkit-tap-highlight-color: transparent;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>header {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>display: flex;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>justify-content: space-between;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>align-items: center;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>margin-bottom: 20px;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>flex-wrap: wrap;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>gap: 10px;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>h1 { margin: 0; font-size: 1.5rem; width: 100%; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.header-actions { display: flex; gap: 8px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b><span class="Apple-converted-space">    </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>button {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>cursor: pointer; border: none; border-radius: 8px;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>background: rgba(255, 255, 255, 0.2); color: white;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>padding: 8px 12px; font-size: 0.9rem; font-weight: bold;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>button:active { background: rgba(255, 255, 255, 0.4); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>#grid {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>display: grid;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>gap: 20px 16px;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.counter-wrapper { display: flex; flex-direction: column; gap: 8px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.counter-box {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>aspect-ratio: 1 / 1; background-color: var(--box-bg); border-radius: 16px;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>position: relative; overflow: hidden; background-size: cover; background-position: center;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>box-shadow: 0 4px 10px rgba(0,0,0,0.3); cursor: pointer; border: 3px solid transparent;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>transition: border 0.3s;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.counter-box.target-reached { border-color: var(--highlight); box-shadow: 0 0 15px rgba(255, 204, 0, 0.5); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b><span class="Apple-converted-space">    </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.ui-layer {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>position: absolute; inset: 0; display: flex; flex-direction: column;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>background: var(--overlay); padding: 10px; transition: background 0.1s;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.counter-box:active .ui-layer { background: rgba(0, 0, 0, 0.1); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.top-bar { display: flex; justify-content: space-between; align-items: flex-start; z-index: 10; gap: 4px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.title-input {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>background: transparent; border: none; color: white; font-weight: bold;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>font-size: 1rem; width: 100%; text-shadow: 1px 1px 2px black;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.title-input:focus { outline: none; background: rgba(0,0,0,0.5); border-radius: 4px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.target-input {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3); color: var(--highlight);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>border-radius: 4px; width: 40px; text-align: center; font-size: 0.8rem; font-weight: bold;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b><span class="Apple-converted-space">    </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.count-display {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>font-size: 4rem; font-weight: bold; text-shadow: 2px 2px 8px rgba(0,0,0,0.8); pointer-events: none; margin: 0;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.action-bar { display: flex; justify-content: space-between; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.icon-btn {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>padding: 4px; font-size: 1.1rem; border-radius: 50%; width: 34px; height: 34px;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>display: flex; align-items: center; justify-content: center; background: rgba(255, 255, 255, 0.15);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>/* モーダル共通 */</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.modal {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>z-index: 9999; flex-direction: column; align-items: center; justify-content: center;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.modal-close { position: absolute; top: 20px; right: 20px; font-size: 2rem; color: white; cursor: pointer; z-index: 10000; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b><span class="Apple-converted-space">    </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>/* カルーセル */</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.carousel-container { position: relative; width: 100%; height: 80%; display: flex; align-items: center; justify-content: center; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>#modalImage { max-width: 95%; max-height: 100%; object-fit: contain; border-radius: 8px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.carousel-btn {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>border: none; color: white; font-size: 2rem; padding: 10px 15px; border-radius: 50%; cursor: pointer;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.carousel-prev { left: 10px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.carousel-next { right: 10px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.image-counter { position: absolute; bottom: 10%; color: white; font-size: 1.2rem; font-weight: bold; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>/* ギャラリー */</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.gallery-content { width: 90%; max-height: 80%; overflow-y: auto; background: var(--box-bg); padding: 20px; border-radius: 16px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 20px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.gallery-item { aspect-ratio: 1; background-size: cover; background-position: center; border-radius: 8px; position: relative; border: 2px solid transparent; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.gallery-item.is-cover { border-color: var(--highlight); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.gallery-item-actions { position: absolute; bottom: 4px; right: 4px; display: flex; gap: 4px; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.g-btn { background: rgba(0,0,0,0.7); border: none; border-radius: 4px; font-size: 0.8rem; padding: 4px; cursor: pointer; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>.add-image-btn { width: 100%; padding: 12px; margin-top: 15px; background: rgba(255,255,255,0.1); border: 2px dashed rgba(255,255,255,0.5); color: white; border-radius: 8px; font-weight: bold; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;/style&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b>&lt;/head&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b>&lt;body&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;header&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;h1&gt;Visual Counter V2&lt;/h1&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;div class="header-actions"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;button onclick="exportData()"&gt;💾 退避&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;button onclick="document.getElementById('importFile').click()"&gt;📂 復元&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;button onclick="addCounter()"&gt;＋ 追加&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;/header&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;div id="grid"&gt;&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;!-- カルーセルモーダル --&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;div id="carouselModal" class="modal"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;div class="modal-close" onclick="closeCarousel()"&gt;×&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;div class="carousel-container"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;button class="carousel-btn carousel-prev" onclick="changeSlide(-1)"&gt;◀&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;img id="modalImage" src="" alt="View"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;button class="carousel-btn carousel-next" onclick="changeSlide(1)"&gt;▶&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;div id="imageIndexDisplay" class="image-counter"&gt;1 / 1&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;!-- ギャラリーモーダル --&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;div id="galleryModal" class="modal"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;div class="modal-close" onclick="closeGallery()"&gt;×&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;div class="gallery-content"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;h2 style="margin-top:0"&gt;画像ギャラリー&lt;/h2&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;p style="font-size:0.8rem; color:#aaa;"&gt;📍: 表紙に設定 / 🗑️: 削除&lt;/p&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;div id="galleryGrid" class="gallery-grid"&gt;&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;button class="add-image-btn" onclick="document.getElementById('galleryUpload').click()"&gt;＋ 新しい画像を追加&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>&lt;input type="file" id="galleryUpload" accept="image/*" style="display:none" onchange="uploadToGallery(event)"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;script&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>let counters = [];</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>let currentCarouselId = null;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>let currentSlideIndex = 0;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>let currentGalleryId = null;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>// データ初期化とV1からのマイグレーション</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function initData() {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const raw = localStorage.getItem('visual_counters');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (raw) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>let parsed = JSON.parse(raw);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>counters = parsed.map(c =&gt; {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>if (!c.images) c.images = [];</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>// 古いバージョンの 'image' プロパティを新しい配列形式へ変換</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>if (c.image) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>c.images.push({ id: generateId(), url: c.image, isCover: true });</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>delete c.image;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>if (c.target === undefined) c.target = 0; // 目標回数初期値</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>return c;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>});</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>saveData();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>render();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function saveData() { localStorage.setItem('visual_counters', JSON.stringify(counters)); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function triggerHaptic() { if (navigator.vibrate) navigator.vibrate(40); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function generateId() { return '_' + Math.random().toString(36).substr(2, 9); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>// --- カウンター基本操作 ---</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function addCounter() {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>counters.push({ id: generateId(), title: '', count: 0, target: 0, images: [] });</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>saveData(); render();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function deleteCounter(id) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if(confirm('このボックスを完全に削除しますか？')) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>counters = counters.filter(c =&gt; c.id !== id);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>saveData(); render();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function increment(id) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>triggerHaptic();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === id);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (c) { c.count++; saveData(); render(); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function decrement(id) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>triggerHaptic();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === id);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (c) { c.count--; saveData(); render(); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function resetCount(id) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === id);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (c &amp;&amp; confirm('カウントをリセットしますか？')) { c.count = 0; saveData(); render(); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function updateTitle(id, val) { const c = counters.find(x =&gt; x.id === id); if(c) { c.title = val; saveData(); } }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function updateTarget(id, val) { const c = counters.find(x =&gt; x.id === id); if(c) { c.target = parseInt(val) || 0; saveData(); render(); } }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>// --- バックアップ（エクスポート/インポート） ---</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function exportData() {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(counters));</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const downloadAnchorNode = document.createElement('a');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>downloadAnchorNode.setAttribute("href", dataStr);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>downloadAnchorNode.setAttribute("download", "visual_counter_backup.json");</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>document.body.appendChild(downloadAnchorNode);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>downloadAnchorNode.click();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>downloadAnchorNode.remove();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function importData(event) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const file = event.target.files[0];</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (!file) return;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const reader = new FileReader();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>reader.onload = function(e) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>try {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>counters = JSON.parse(e.target.result);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>saveData(); render(); alert('復元が完了しました。');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>} catch (err) { alert('ファイルの読み込みに失敗しました。'); }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>};</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>reader.readAsText(file);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>event.target.value = '';</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>// --- 画像圧縮・アップロード ---</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function processImage(file, callback) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const reader = new FileReader();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>reader.onload = function(e) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const img = new Image();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>img.onload = function() {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>const canvas = document.createElement('canvas');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>const MAX_SIZE = 500; // 複数枚保存のため圧縮率を強化</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>let w = img.width, h = img.height;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>if (w &gt; h) { if (w &gt; MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } }<span class="Apple-converted-space"> </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>else { if (h &gt; MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>canvas.width = w; canvas.height = h;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>const ctx = canvas.getContext('2d');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>ctx.drawImage(img, 0, 0, w, h);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>callback(canvas.toDataURL('image/jpeg', 0.6));</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>};</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>img.src = e.target.result;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>};</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>reader.readAsDataURL(file);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function uploadToGallery(event) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const file = event.target.files[0];</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (!file || !currentGalleryId) return;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>processImage(file, (dataUrl) =&gt; {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const c = counters.find(x =&gt; x.id === currentGalleryId);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const isFirst = c.images.length === 0;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>c.images.push({ id: generateId(), url: dataUrl, isCover: isFirst });</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>saveData();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>renderGallery();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>render(); // 背景更新</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>});</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>event.target.value = '';</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>// --- ギャラリー管理 ---</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function openGallery(id) { currentGalleryId = id; renderGallery(); document.getElementById('galleryModal').style.display = 'flex'; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function closeGallery() { document.getElementById('galleryModal').style.display = 'none'; currentGalleryId = null; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b><span class="Apple-converted-space">    </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function setCover(imageId) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === currentGalleryId);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>c.images.forEach(img =&gt; img.isCover = (img.id === imageId));</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>saveData(); renderGallery(); render();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function deleteImage(imageId) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if(!confirm('この画像を削除しますか？')) return;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === currentGalleryId);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>c.images = c.images.filter(img =&gt; img.id !== imageId);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if(c.images.length &gt; 0 &amp;&amp; !c.images.some(img =&gt; img.isCover)) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>c.images[0].isCover = true; // カバーが消えたら最初の画像をカバーに</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>saveData(); renderGallery(); render();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function renderGallery() {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === currentGalleryId);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const grid = document.getElementById('galleryGrid');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>grid.innerHTML = '';</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>c.images.forEach(img =&gt; {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const div = document.createElement('div');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>div.className = `gallery-item ${img.isCover ? 'is-cover' : ''}`;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>div.style.backgroundImage = `url(${img.url})`;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>div.innerHTML = `</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>&lt;div class="gallery-item-actions"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;button class="g-btn" onclick="setCover('${img.id}')"&gt;📍&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;button class="g-btn" style="color:red;" onclick="deleteImage('${img.id}')"&gt;🗑️&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>`;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>grid.appendChild(div);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>});</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>// --- カルーセル表示 ---</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function openCarousel(id, event) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>event.stopPropagation();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === id);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (!c || c.images.length === 0) return;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>currentCarouselId = id;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>// 表紙画像を初期スライドに設定</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const coverIndex = c.images.findIndex(img =&gt; img.isCover);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>currentSlideIndex = coverIndex &gt;= 0 ? coverIndex : 0;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>updateCarouselView();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>document.getElementById('carouselModal').style.display = 'flex';</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function closeCarousel() { document.getElementById('carouselModal').style.display = 'none'; currentCarouselId = null; }</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function changeSlide(direction) {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === currentCarouselId);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>currentSlideIndex += direction;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (currentSlideIndex &lt; 0) currentSlideIndex = c.images.length - 1;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>if (currentSlideIndex &gt;= c.images.length) currentSlideIndex = 0;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>updateCarouselView();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function updateCarouselView() {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const c = counters.find(x =&gt; x.id === currentCarouselId);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>document.getElementById('modalImage').src = c.images[currentSlideIndex].url;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>document.getElementById('imageIndexDisplay').innerText = `${currentSlideIndex + 1} / ${c.images.length}`;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>// --- メイン描画 ---</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>function render() {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>const grid = document.getElementById('grid');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>grid.innerHTML = '';</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>counters.forEach(c =&gt; {</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const wrapper = document.createElement('div');</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>wrapper.className = 'counter-wrapper';</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b><span class="Apple-converted-space">        </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>let coverImg = c.images.find(img =&gt; img.isCover) || c.images[0];</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const bgStyle = coverImg ? `background-image: url(${coverImg.url});` : '';</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const isTargetReached = c.target &gt; 0 &amp;&amp; c.count &gt;= c.target;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>const boxClass = `counter-box ${isTargetReached ? 'target-reached' : ''}`;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>wrapper.innerHTML = `</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>&lt;div class="${boxClass}" style="${bgStyle}" onclick="increment('${c.id}')"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;div class="ui-layer"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">              </span>&lt;div class="top-bar"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">                </span>&lt;input type="text" class="title-input" value="${c.title}" placeholder="タイトル"<span class="Apple-converted-space"> </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">                       </span>onclick="event.stopPropagation()" onchange="updateTitle('${c.id}', this.value)"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">                </span>&lt;input type="number" class="target-input" value="${c.target || ''}" placeholder="目標" title="目標回数"</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">                       </span>onclick="event.stopPropagation()" onchange="updateTarget('${c.id}', this.value)"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">              </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">              </span>&lt;p class="count-display"&gt;${c.count}&lt;/p&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">              </span>&lt;div style="position:absolute; bottom:10px; right:10px; z-index:10;"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">                </span>&lt;button class="icon-btn" style="${c.images.length &gt; 0 ? 'background: rgba(0,0,0,0.6)' : 'opacity:0.3'};"<span class="Apple-converted-space"> </span></b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">                        </span>onclick="openCarousel('${c.id}', event)"&gt;👁️&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">              </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>&lt;div class="action-bar"&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;button class="icon-btn" onclick="decrement('${c.id}')"&gt;➖&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;button class="icon-btn" onclick="resetCount('${c.id}')"&gt;🔄&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;button class="icon-btn" onclick="openGallery('${c.id}')"&gt;🗂️&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">            </span>&lt;button class="icon-btn" style="background:rgba(255,0,0,0.3)" onclick="deleteCounter('${c.id}')"&gt;🗑️&lt;/button&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">          </span>&lt;/div&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>`;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">        </span>grid.appendChild(wrapper);</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">      </span>});</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>}</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff; min-height: 21.0px"><span class="s1"><b></b></span><br></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">    </span>initData();</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b><span class="Apple-converted-space">  </span>&lt;/script&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b>&lt;/body&gt;</b></span></h1>
-<h1 style="margin: 0.0px 0.0px 0.0px 0.0px; font: 18.0px 'Helvetica Neue'; color: #ffffff; -webkit-text-stroke: #ffffff"><span class="s1"><b>&lt;/html&gt;</b></span></h1>
+
+  <header>
+    <h1>Visual Counter V2</h1>
+    <div class="header-actions">
+      <button onclick="exportData()">💾 退避</button>
+      <button onclick="document.getElementById('importFile').click()">📂 復元</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+      <button onclick="addCounter()">＋ 追加</button>
+    </div>
+  </header>
+
+  <div id="grid"></div>
+
+  <!-- カルーセルモーダル -->
+  <div id="carouselModal" class="modal">
+    <div class="modal-close" onclick="closeCarousel()">×</div>
+    <div class="carousel-container">
+      <button class="carousel-btn carousel-prev" onclick="changeSlide(-1)">◀</button>
+      <img id="modalImage" src="" alt="View">
+      <button class="carousel-btn carousel-next" onclick="changeSlide(1)">▶</button>
+    </div>
+    <div id="imageIndexDisplay" class="image-counter">1 / 1</div>
+  </div>
+
+  <!-- ギャラリーモーダル -->
+  <div id="galleryModal" class="modal">
+    <div class="modal-close" onclick="closeGallery()">×</div>
+    <div class="gallery-content">
+      <h2 style="margin-top:0">画像ギャラリー</h2>
+      <p style="font-size:0.8rem; color:#aaa;">📍: 表紙に設定 / 🗑️: 削除</p>
+      <div id="galleryGrid" class="gallery-grid"></div>
+      <button class="add-image-btn" onclick="document.getElementById('galleryUpload').click()">＋ 新しい画像を追加</button>
+      <input type="file" id="galleryUpload" accept="image/*" style="display:none" onchange="uploadToGallery(event)">
+    </div>
+  </div>
+
+  <script>
+    let counters = [];
+    let currentCarouselId = null;
+    let currentSlideIndex = 0;
+    let currentGalleryId = null;
+
+    // データ初期化とV1からのマイグレーション
+    function initData() {
+      const raw = localStorage.getItem('visual_counters');
+      if (raw) {
+        let parsed = JSON.parse(raw);
+        counters = parsed.map(c => {
+          if (!c.images) c.images = [];
+          // 古いバージョンの 'image' プロパティを新しい配列形式へ変換
+          if (c.image) {
+            c.images.push({ id: generateId(), url: c.image, isCover: true });
+            delete c.image;
+          }
+          if (c.target === undefined) c.target = 0; // 目標回数初期値
+          return c;
+        });
+      }
+      saveData();
+      render();
+    }
+
+    function saveData() { localStorage.setItem('visual_counters', JSON.stringify(counters)); }
+    function triggerHaptic() { if (navigator.vibrate) navigator.vibrate(40); }
+    function generateId() { return '_' + Math.random().toString(36).substr(2, 9); }
+
+    // --- カウンター基本操作 ---
+    function addCounter() {
+      counters.push({ id: generateId(), title: '', count: 0, target: 0, images: [] });
+      saveData(); render();
+    }
+    function deleteCounter(id) {
+      if(confirm('このボックスを完全に削除しますか？')) {
+        counters = counters.filter(c => c.id !== id);
+        saveData(); render();
+      }
+    }
+    function increment(id) {
+      triggerHaptic();
+      const c = counters.find(x => x.id === id);
+      if (c) { c.count++; saveData(); render(); }
+    }
+    function decrement(id) {
+      triggerHaptic();
+      const c = counters.find(x => x.id === id);
+      if (c) { c.count--; saveData(); render(); }
+    }
+    function resetCount(id) {
+      const c = counters.find(x => x.id === id);
+      if (c && confirm('カウントをリセットしますか？')) { c.count = 0; saveData(); render(); }
+    }
+    function updateTitle(id, val) { const c = counters.find(x => x.id === id); if(c) { c.title = val; saveData(); } }
+    function updateTarget(id, val) { const c = counters.find(x => x.id === id); if(c) { c.target = parseInt(val) || 0; saveData(); render(); } }
+
+    // --- バックアップ（エクスポート/インポート） ---
+    function exportData() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(counters));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "visual_counter_backup.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+    }
+    function importData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          counters = JSON.parse(e.target.result);
+          saveData(); render(); alert('復元が完了しました。');
+        } catch (err) { alert('ファイルの読み込みに失敗しました。'); }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    // --- 画像圧縮・アップロード ---
+    function processImage(file, callback) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 500; // 複数枚保存のため圧縮率を強化
+          let w = img.width, h = img.height;
+          if (w > h) { if (w > MAX_SIZE) { h *= MAX_SIZE / w; w = MAX_SIZE; } } 
+          else { if (h > MAX_SIZE) { w *= MAX_SIZE / h; h = MAX_SIZE; } }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          callback(canvas.toDataURL('image/jpeg', 0.6));
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function uploadToGallery(event) {
+      const file = event.target.files[0];
+      if (!file || !currentGalleryId) return;
+      processImage(file, (dataUrl) => {
+        const c = counters.find(x => x.id === currentGalleryId);
+        const isFirst = c.images.length === 0;
+        c.images.push({ id: generateId(), url: dataUrl, isCover: isFirst });
+        saveData();
+        renderGallery();
+        render(); // 背景更新
+      });
+      event.target.value = '';
+    }
+
+    // --- ギャラリー管理 ---
+    function openGallery(id) { currentGalleryId = id; renderGallery(); document.getElementById('galleryModal').style.display = 'flex'; }
+    function closeGallery() { document.getElementById('galleryModal').style.display = 'none'; currentGalleryId = null; }
+    
+    function setCover(imageId) {
+      const c = counters.find(x => x.id === currentGalleryId);
+      c.images.forEach(img => img.isCover = (img.id === imageId));
+      saveData(); renderGallery(); render();
+    }
+    function deleteImage(imageId) {
+      if(!confirm('この画像を削除しますか？')) return;
+      const c = counters.find(x => x.id === currentGalleryId);
+      c.images = c.images.filter(img => img.id !== imageId);
+      if(c.images.length > 0 && !c.images.some(img => img.isCover)) {
+        c.images[0].isCover = true; // カバーが消えたら最初の画像をカバーに
+      }
+      saveData(); renderGallery(); render();
+    }
+
+    function renderGallery() {
+      const c = counters.find(x => x.id === currentGalleryId);
+      const grid = document.getElementById('galleryGrid');
+      grid.innerHTML = '';
+      c.images.forEach(img => {
+        const div = document.createElement('div');
+        div.className = `gallery-item ${img.isCover ? 'is-cover' : ''}`;
+        div.style.backgroundImage = `url(${img.url})`;
+        div.innerHTML = `
+          <div class="gallery-item-actions">
+            <button class="g-btn" onclick="setCover('${img.id}')">📍</button>
+            <button class="g-btn" style="color:red;" onclick="deleteImage('${img.id}')">🗑️</button>
+          </div>
+        `;
+        grid.appendChild(div);
+      });
+    }
+
+    // --- カルーセル表示 ---
+    function openCarousel(id, event) {
+      event.stopPropagation();
+      const c = counters.find(x => x.id === id);
+      if (!c || c.images.length === 0) return;
+      currentCarouselId = id;
+      // 表紙画像を初期スライドに設定
+      const coverIndex = c.images.findIndex(img => img.isCover);
+      currentSlideIndex = coverIndex >= 0 ? coverIndex : 0;
+      updateCarouselView();
+      document.getElementById('carouselModal').style.display = 'flex';
+    }
+    function closeCarousel() { document.getElementById('carouselModal').style.display = 'none'; currentCarouselId = null; }
+    function changeSlide(direction) {
+      const c = counters.find(x => x.id === currentCarouselId);
+      currentSlideIndex += direction;
+      if (currentSlideIndex < 0) currentSlideIndex = c.images.length - 1;
+      if (currentSlideIndex >= c.images.length) currentSlideIndex = 0;
+      updateCarouselView();
+    }
+    function updateCarouselView() {
+      const c = counters.find(x => x.id === currentCarouselId);
+      document.getElementById('modalImage').src = c.images[currentSlideIndex].url;
+      document.getElementById('imageIndexDisplay').innerText = `${currentSlideIndex + 1} / ${c.images.length}`;
+    }
+
+    // --- メイン描画 ---
+    function render() {
+      const grid = document.getElementById('grid');
+      grid.innerHTML = '';
+      counters.forEach(c => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'counter-wrapper';
+        
+        let coverImg = c.images.find(img => img.isCover) || c.images[0];
+        const bgStyle = coverImg ? `background-image: url(${coverImg.url});` : '';
+        const isTargetReached = c.target > 0 && c.count >= c.target;
+        const boxClass = `counter-box ${isTargetReached ? 'target-reached' : ''}`;
+
+        wrapper.innerHTML = `
+          <div class="${boxClass}" style="${bgStyle}" onclick="increment('${c.id}')">
+            <div class="ui-layer">
+              <div class="top-bar">
+                <input type="text" class="title-input" value="${c.title}" placeholder="タイトル" 
+                       onclick="event.stopPropagation()" onchange="updateTitle('${c.id}', this.value)">
+                <input type="number" class="target-input" value="${c.target || ''}" placeholder="目標" title="目標回数"
+                       onclick="event.stopPropagation()" onchange="updateTarget('${c.id}', this.value)">
+              </div>
+              <p class="count-display">${c.count}</p>
+              <div style="position:absolute; bottom:10px; right:10px; z-index:10;">
+                <button class="icon-btn" style="${c.images.length > 0 ? 'background: rgba(0,0,0,0.6)' : 'opacity:0.3'};" 
+                        onclick="openCarousel('${c.id}', event)">👁️</button>
+              </div>
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="icon-btn" onclick="decrement('${c.id}')">➖</button>
+            <button class="icon-btn" onclick="resetCount('${c.id}')">🔄</button>
+            <button class="icon-btn" onclick="openGallery('${c.id}')">🗂️</button>
+            <button class="icon-btn" style="background:rgba(255,0,0,0.3)" onclick="deleteCounter('${c.id}')">🗑️</button>
+          </div>
+        `;
+        grid.appendChild(wrapper);
+      });
+    }
+
+    initData();
+  </script>
 </body>
 </html>
